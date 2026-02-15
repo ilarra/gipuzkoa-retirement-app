@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "members": [
+    {
+      "id": "1",
+      "name": "Restored User",
+      "age": 60,
+      "isEarner": true,
+      "retirementAge": 65
+    }
+  ],
+  "assets": [
+    {
+      "id": "100",
+      "name": "Restored Asset",
+      "type": "stock",
+      "value": 999999,
+      "owners": ["1"],
+      "purchaseValue": 500000,
+      "isMainResidence": false
+    }
+  ],
+  "incomes": [],
+  "expenses": [],
+  "settings": {
+    "targetRetirementIncome": 50000
+  },
+  "timestamp": "2026-02-15T12:00:00.000Z"
+}
