@@ -6,12 +6,13 @@ import { AssetsForm } from './components/AssetsForm';
 import { IncomeForm } from './components/IncomeForm';
 import { Dashboard } from './components/Dashboard';
 import { DataImport } from './components/DataImport';
+import { LogicTab } from './components/LogicTab';
 import { exportToJSON } from './utils/importUtils';
 import type { ParsedData } from './utils/importUtils';
 import './App.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'family' | 'assets' | 'income' | 'dashboard'>('family');
+  const [activeTab, setActiveTab] = useState<'family' | 'assets' | 'income' | 'dashboard' | 'logic'>('family');
   const [showImport, setShowImport] = useState(false);
 
   const [members, setMembers] = useState<FamilyMember[]>([
@@ -123,6 +124,7 @@ function App() {
         <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => setActiveTab('assets')}>Assets</button>
         <button className={activeTab === 'income' ? 'active' : ''} onClick={() => setActiveTab('income')}>Income & Expenses</button>
         <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Dashboard</button>
+        <button className={activeTab === 'logic' ? 'active' : ''} onClick={() => setActiveTab('logic')}>Logic</button>
       </nav>
 
       <main className="app-content">
@@ -150,7 +152,8 @@ function App() {
             <IncomeForm incomes={incomes} setIncomes={setIncomes} expenses={expenses} setExpenses={setExpenses} members={members} />
           </div>
         )}
-        {activeTab === 'dashboard' && <Dashboard result={simulationResult} />}
+        {activeTab === 'dashboard' && <Dashboard result={simulationResult} members={members} />}
+        {activeTab === 'logic' && <LogicTab />}
       </main>
     </div>
   );
