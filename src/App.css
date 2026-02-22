@@ -63,6 +63,7 @@ nav button.active {
 
 .form-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 15px;
   margin-bottom: 10px;
   align-items: end;
