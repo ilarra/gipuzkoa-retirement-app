@@ -21,14 +21,14 @@ export const IRPF_SAVINGS_BRACKETS_2024 = [
 ];
 
 export const WEALTH_TAX_BRACKETS_2024 = [
-    { limit: 200000, rate: 0.002, baseTax: 0 },
-    { limit: 400000, rate: 0.003, baseTax: 400 },
-    { limit: 800000, rate: 0.005, baseTax: 1000 },
-    { limit: 1600000, rate: 0.009, baseTax: 3000 },
-    { limit: 3200000, rate: 0.013, baseTax: 10200 },
-    { limit: 6400000, rate: 0.017, baseTax: 31000 },
-    { limit: 12800000, rate: 0.021, baseTax: 85400 },
-    { limit: Infinity, rate: 0.025, baseTax: 219800 }
+    { limit: 167129, rate: 0.002, baseTax: 0 },
+    { limit: 334252, rate: 0.003, baseTax: 334.26 },
+    { limit: 668499, rate: 0.005, baseTax: 835.63 },
+    { limit: 1336999, rate: 0.009, baseTax: 2506.86 },
+    { limit: 2673999, rate: 0.013, baseTax: 8523.36 },
+    { limit: 5347998, rate: 0.017, baseTax: 25904.36 },
+    { limit: 10695996, rate: 0.021, baseTax: 71362.35 },
+    { limit: Infinity, rate: 0.025, baseTax: 183670.30 }
 ];
 
 export const WEALTH_TAX_EXEMPT_MIN = 700000;
@@ -126,13 +126,13 @@ export function calculateWealthTax(netWealth: number, isMainHome: boolean, mainH
 
     const brackets = [
         { threshold: 0, tax: 0, rate: 0.002 },
-        { threshold: 200000, tax: 400, rate: 0.003 },
-        { threshold: 400000, tax: 1000, rate: 0.005 },
-        { threshold: 800000, tax: 3000, rate: 0.009 },
-        { threshold: 1600000, tax: 10200, rate: 0.013 },
-        { threshold: 3200000, tax: 31000, rate: 0.017 },
-        { threshold: 6400000, tax: 85400, rate: 0.021 },
-        { threshold: 12800000, tax: 219800, rate: 0.025 }
+        { threshold: 167129, tax: 334.26, rate: 0.003 },
+        { threshold: 334252, tax: 835.63, rate: 0.005 },
+        { threshold: 668499, tax: 2506.86, rate: 0.009 },
+        { threshold: 1336999, tax: 8523.36, rate: 0.013 },
+        { threshold: 2673999, tax: 25904.36, rate: 0.017 },
+        { threshold: 5347998, tax: 71362.35, rate: 0.021 },
+        { threshold: 10695996, tax: 183670.30, rate: 0.025 }
     ];
 
     // iterate backwards to find the threshold
