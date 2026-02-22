@@ -1,5 +1,5 @@
 
-import type { Asset, Expense, FamilyMember, IncomeStream, SimulationResult, YearResult } from '../types';
+import type { Asset, Expense, FamilyMember, IncomeStream, SimulationResult, YearResult, TaxResults } from '../types';
 import { calculateIRPFGeneral, calculateIRPFSavings, calculateWealthTax, applyEscudoFiscal } from './taxCalculations';
 
 export interface ProjectionParameters {
@@ -84,7 +84,17 @@ export function runProjection(
         let totalExpenses = 0;
         currentExpenses.forEach(exp => {
             if (i > 0) exp.amount = exp.amount * (1 + exp.growthRate);
-            totalExpenses += exp.amount;
+
+            let isActive = true;
+            if (exp.startYear !== undefined && i < exp.startYear) isActive = false;
+            // endYear is relative to the start of the simulation (year 0). 
+            // So if endYear is 15, it means it is active for years 0 through 14. 
+            // When i = 15, it is no longer active.
+            if (exp.endYear !== undefined && i >= exp.endYear) isActive = false;
+
+            if (isActive) {
+                totalExpenses += exp.amount;
+            }
         });
 
         // 3. Asset Drawdown Logic (Top-up)
@@ -141,19 +151,60 @@ export function runProjection(
                 });
             });
 
+            // Subtract outstanding mortgage debt from net wealth
+            currentExpenses.forEach(exp => {
+                if (!exp.isMortgage) return;
+
+                // Calculate remaining years
+                const startYearOffset = exp.startYear || 0;
+                const endYearOffset = exp.endYear || 0;
+
+                // Only consider active/future mortgages
+                if (i >= endYearOffset) return;
+
+                // If it hasn't started yet, the full debt exists or we only count from start?
+                // Let's assume debt exists now but payments haven't started, or it only exists from startYear.
+                if (i < startYearOffset) return;
+
+                const yearsRemaining = endYearOffset - i;
+                const outstandingDebt = exp.amount * yearsRemaining;
+
+                // Apportion debt equally among all earners for simplicity, 
+                // or ideally we would have 'owners' on expenses. 
+                // Let's divide by number of earners.
+                const earners = members.filter(m => m.isEarner).map(m => m.id);
+                if (earners.length === 0) return;
+
+                const debtPerEarner = outstandingDebt / earners.length;
+                earners.forEach(oid => {
+                    if (mData[oid]) {
+                        // Debt reduces net wealth (but not below 0 generally for wealth tax purposes, though mathematically it can)
+                        mData[oid].netWealth = Math.max(0, mData[oid].netWealth - debtPerEarner);
+                    }
+                });
+            });
+
+            const memberTaxesResults: Record<string, TaxResults> = {};
+
             for (const m of members) {
                 const d = mData[m.id];
-                if (!d) continue;
+                if (!d) {
+                    memberTaxesResults[m.id] = { irpf: 0, irpfGeneral: 0, irpfSavings: 0, wealthTax: 0, escudoFiscalAdjustment: 0 };
+                    continue;
+                }
                 const taxGen = calculateIRPFGeneral(d.generalBase);
                 const taxSav = calculateIRPFSavings(d.savingsBase);
                 const irpf = taxGen + taxSav;
                 const wealth = calculateWealthTax(d.netWealth, d.mainHomeValue > 0, d.mainHomeValue);
                 const { finalWealthTax, adjustment } = applyEscudoFiscal(irpf, wealth, d.generalBase, d.savingsBase);
 
-                // Adjust split IRPF based on Escudo Fiscal if needed? 
-                // Escudo limits Total tax (IRPF+IP). It usually reduces IP. 
-                // If IRPF > Limit, strictly speaking IRPF isn't reduced, IP is. 
-                // So we can extract original IRPF components safely.
+                memberTaxesResults[m.id] = {
+                    irpf,
+                    irpfGeneral: taxGen,
+                    irpfSavings: taxSav,
+                    wealthTax: finalWealthTax,
+                    escudoFiscalAdjustment: adjustment
+                };
 
                 tIrpf += irpf;
                 tIrpfGen += taxGen;
@@ -161,7 +212,7 @@ export function runProjection(
                 tWealth += finalWealthTax;
                 tEscudo += adjustment;
             }
-            return { irpf: tIrpf, irpfGeneral: tIrpfGen, irpfSavings: tIrpfSav, wealthTax: tWealth, escudo: tEscudo };
+            return { irpf: tIrpf, irpfGeneral: tIrpfGen, irpfSavings: tIrpfSav, wealthTax: tWealth, escudo: tEscudo, memberTaxes: memberTaxesResults };
         }
 
         let baseTaxes = calculateTaxesForIncome(realizedIncomes, currentAssets);
@@ -178,9 +229,17 @@ export function runProjection(
                 const deficit = params.targetRetirementIncome - netIncomeFixed;
                 // Needed cash to cover deficit.
 
-                // Let's assume we withdraw from 'stock' or 'fund'.
-                // Sort liquid assets by value?
-                const liquidAssets = currentAssets.filter(a => (a.type === 'stock' || a.type === 'fund') && a.value > 0);
+                // Let's assume we withdraw from 'cash' first, then 'stock' or 'fund'.
+                // Sort liquid assets by growth rate (lowest first) or type hierarchy.
+                const liquidAssets = currentAssets
+                    .filter(a => (a.type === 'stock' || a.type === 'fund' || a.type === 'cash') && a.value > 0)
+                    .sort((a, b) => {
+                        // Prioritize cash
+                        if (a.type === 'cash' && b.type !== 'cash') return -1;
+                        if (a.type !== 'cash' && b.type === 'cash') return 1;
+                        // Then by growth rate (ascending)
+                        return (a.growthRate || 0) - (b.growthRate || 0);
+                    });
 
                 let remainingToWithdraw = deficit; // This is NET needed.
 
@@ -218,19 +277,53 @@ export function runProjection(
         const finalTaxes = calculateTaxesForIncome(realizedIncomes, currentAssets);
 
         // 4. Cash Flow & Net Worth Update
-        const totalTax = finalTaxes.irpf + finalTaxes.wealthTax;
+        // We need to attribute Cash Flow to individuals to prevent "Socialist Simulation" (Wealth Convergence)
+        // Individual Cash Flow = (Individual Income + Individual Drawdowns) - Individual Taxes - (Shared Expenses / N)
 
-        // Cash Flow = (Fixed Income + Drawdowns) - Expenses - Taxes
+        const earners = members.filter(m => m.isEarner); // Or all adults?
+        // Assuming if isEarner=false (kids), they don't pay expenses or get savings.
+        const expenseShare = totalExpenses / (earners.length || 1);
+
+        const memberCashFlows: Record<string, number> = {};
+        earners.forEach(m => memberCashFlows[m.id] = 0);
+
+        // Attribute Incomes
+        realizedIncomes.forEach(inc => {
+            const count = inc.owners?.length || 0;
+            if (count === 0) return;
+            const amt = inc.realizedAmount / count;
+            inc.owners.forEach(oid => {
+                if (memberCashFlows[oid] !== undefined) memberCashFlows[oid] += amt;
+            });
+        });
+
+        // Subtract Taxes and Expenses
+        earners.forEach(m => {
+            const tax = (finalTaxes.memberTaxes[m.id]?.irpf || 0) + (finalTaxes.memberTaxes[m.id]?.wealthTax || 0);
+            memberCashFlows[m.id] -= tax;
+            memberCashFlows[m.id] -= expenseShare;
+        });
+
+        // Global Cash Flow (for display)
+        const totalTax = finalTaxes.irpf + finalTaxes.wealthTax;
         const totalCashIn = yearGrossFixed + drawdownAmount;
         const cashFlow = totalCashIn - totalExpenses - totalTax;
 
-        const totalNetWorth = currentAssets.reduce((sum, a) => sum + a.value, 0);
+        // Calculate global outstanding debt for the dashboard
+        let globalOutstandingDebt = 0;
+        currentExpenses.forEach(exp => {
+            if (exp.isMortgage && i >= (exp.startYear || 0) && i < (exp.endYear || 0)) {
+                globalOutstandingDebt += exp.amount * ((exp.endYear || 0) - i);
+            }
+        });
+
+        const totalNetWorth = currentAssets.reduce((sum, a) => sum + a.value, 0) - globalOutstandingDebt;
 
         years.push({
             year: currentYear,
             age: (members[0].age || 40) + i,
             netWorth: totalNetWorth,
-            totalIncome: totalCashIn, // Display Cash Income?
+            totalIncome: totalCashIn,
             totalExpenses: totalExpenses,
             taxes: {
                 irpf: finalTaxes.irpf,
@@ -241,52 +334,62 @@ export function runProjection(
             },
             cashFlow,
             withdrawalForTargetIncome: drawdownAmount,
-            assetValues: currentAssets.reduce((acc, a) => ({ ...acc, [a.name]: a.value }), {} as Record<string, number>)
+            assetValues: currentAssets.reduce((acc, a) => ({ ...acc, [a.name]: a.value }), {} as Record<string, number>),
+            incomeBreakdown: realizedIncomes.reduce((acc, inc) => {
+                const effectiveAmount = inc.realizedAmount;
+                if (!effectiveAmount || effectiveAmount === 0) return acc;
+                // Group by name or type? Name is more specific.
+                acc[inc.name] = (acc[inc.name] || 0) + effectiveAmount;
+                return acc;
+            }, {} as Record<string, number>),
+            memberTaxes: finalTaxes.memberTaxes
         });
 
         // 5. Update Asset Values for next year
         currentAssets.forEach(a => {
             let rate = 0;
-            if (a.growthRate !== undefined) {
-                rate = a.growthRate;
-            } else {
-                // Fallback defaults if not set
+            if (a.growthRate !== undefined) rate = a.growthRate;
+            else {
                 if (a.type === 'stock' || a.type === 'fund' || a.type === 'pension_plan') rate = 0.05;
                 else if (a.type === 'real_estate') rate = 0.02;
-                else if (a.type === 'cash') rate = 0;
+                else rate = 0;
             }
+            // Skip updating 'cash' assets here if we update them below? 
+            // Standard growth applies to everything. Cash growth should be 0 usually.
             a.value = a.value * (1 + rate);
         });
 
-        // Add savings / Remove burn
-        if (cashFlow > 0) {
-            let cashAsset = currentAssets.find(a => a.type === 'cash' && a.id === 'generated-cash');
-            if (!cashAsset) {
-                const earnerIds = members.filter(m => m.isEarner).map(m => m.id);
-                const ownerIds = earnerIds.length > 0 ? earnerIds : [members[0].id];
+        // Add savings / Remove burn per member
+        Object.entries(memberCashFlows).forEach(([memberId, flow]) => {
+            if (flow !== 0) {
+                // Find or create "Savings ({Name})"
+                const member = members.find(m => m.id === memberId);
+                const assetName = `Savings (${member?.name || memberId})`;
+                const assetId = `generated-cash-${memberId}`;
 
-                cashAsset = {
-                    id: 'generated-cash',
-                    name: 'Savings',
-                    type: 'cash',
-                    value: 0,
-                    owners: ownerIds,
-                    purchaseValue: 0,
-                    isMainResidence: false
-                };
-                currentAssets.push(cashAsset);
-            }
-            cashAsset.value += cashFlow;
-        } else if (cashFlow < 0) {
-            // Burn cash reserves first
-            let cashAsset = currentAssets.find(a => a.type === 'cash' && a.id === 'generated-cash');
-            if (cashAsset) {
-                cashAsset.value += cashFlow; // Decreases value
-                if (cashAsset.value < 0) {
-                    // Negative cash?
+                let cashAsset = currentAssets.find(a => a.id === assetId);
+                if (!cashAsset) {
+                    cashAsset = {
+                        id: assetId,
+                        name: assetName,
+                        type: 'cash',
+                        value: 0,
+                        owners: [memberId],
+                        purchaseValue: 0,
+                        isMainResidence: false,
+                        growthRate: 0 // Cash doesn't usually grow unless invested
+                    };
+                    currentAssets.push(cashAsset);
                 }
+
+                cashAsset.value += flow;
+
+                // If negative, burn?
+                // The logic allows negative value (debt). 
+                // Alternatively, burn shared assets? 
+                // For now, let's allow negative personal cash (debt) or reduction of personal savings.
             }
-        }
+        });
     }
 
     return { years };

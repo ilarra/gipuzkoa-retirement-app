@@ -42,7 +42,8 @@ export interface Expense {
     amount: number; // Annual amount
     growthRate: number; // Inflation for this expense
     startYear?: number; // relative to now, 0 is now
-    endYear?: number; // relative to now
+    endYear?: number; // relative to now (e.g., years remaining on mortgage)
+    isMortgage?: boolean; // True if this expense is a mortgage
 }
 
 export interface TaxResults {
@@ -63,6 +64,8 @@ export interface YearResult {
     cashFlow: number; // Income - Expenses - Taxes
     withdrawalForTargetIncome: number; // Amount sold from assets to meet target
     assetValues: Record<string, number>; // Breakdown of value by Asset Name
+    incomeBreakdown: Record<string, number>; // Breakdown of income by Source Name (Salary, Rental, etc.)
+    memberTaxes: Record<string, TaxResults>; // Taxes paid by each family member
 }
 
 export interface SimulationResult {

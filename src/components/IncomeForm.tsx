@@ -59,7 +59,16 @@ export const IncomeForm: React.FC<Props> = ({ incomes, setIncomes, expenses, set
     };
 
     const updateExpense = (id: string, field: keyof Expense, value: any) => {
-        setExpenses(expenses.map(e => e.id === id ? { ...e, [field]: value } : e));
+        setExpenses(expenses.map(e => {
+            if (e.id === id) {
+                const updated = { ...e, [field]: value };
+                if (field === 'isMortgage' && value === true) {
+                    updated.growthRate = 0; // Mortgages usually don't inflate
+                }
+                return updated;
+            }
+            return e;
+        }));
     };
 
     const removeExpense = (id: string) => {
@@ -182,8 +191,29 @@ export const IncomeForm: React.FC<Props> = ({ incomes, setIncomes, expenses, set
                             step="0.01"
                             value={expense.growthRate}
                             onChange={e => updateExpense(expense.id, 'growthRate', parseFloat(e.target.value) || 0)}
+                            disabled={expense.isMortgage}
                         />
                     </div>
+                    <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', minWidth: '100%', marginTop: '5px' }}>
+                        <input
+                            type="checkbox"
+                            checked={expense.isMortgage || false}
+                            onChange={e => updateExpense(expense.id, 'isMortgage', e.target.checked)}
+                            id={`mortgage-${expense.id}`}
+                        />
+                        <label htmlFor={`mortgage-${expense.id}`} style={{ marginBottom: 0 }}>Is this a Mortgage/Loan?</label>
+                    </div>
+                    {expense.isMortgage && (
+                        <div className="form-group" style={{ minWidth: '100%', marginTop: '5px' }}>
+                            <label>Years Remaining</label>
+                            <input
+                                type="number"
+                                value={expense.endYear || ''}
+                                onChange={e => updateExpense(expense.id, 'endYear', parseInt(e.target.value) || undefined)}
+                                placeholder="e.g. 15"
+                            />
+                        </div>
+                    )}
                     <button className="danger" onClick={() => removeExpense(expense.id)}>X</button>
                 </div>
             ))}
