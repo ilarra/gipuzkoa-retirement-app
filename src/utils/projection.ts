@@ -254,15 +254,18 @@ export function runProjection(
                     remainingToWithdraw -= withdrawAmount;
                     drawdownAmount += withdrawAmount;
 
-                    // Add to realized income as "Capital Gain" (Simplified: 20% of withdrawal is gain?)
-                    // Let's assume 30% profitability accumulated over years
-                    const estimatedGain = withdrawAmount * 0.3;
+                    // Add to realized income as "Capital Gain" (Plusvalia).
+                    // As requested: 50% of sold stocks/funds are considered gain to be taxed as savings.
+                    let estimatedGain = 0;
+                    if (asset.type === 'stock' || asset.type === 'fund') {
+                        estimatedGain = withdrawAmount * 0.5;
+                    }
 
                     // We need to add this 'Withdrawal Income' to the realized incomes for the FINAL tax calc
                     realizedIncomes.push({
                         id: `drawdown-${asset.id}-${i}`,
-                        name: `Sale of ${asset.name}`,
-                        type: 'other', // Goes to savings base generally? 'dividend'/'interest' types go to savings. 
+                        name: `Sale of ${asset.name} (Plusvalia)`,
+                        type: 'dividend', // 'dividend' goes perfectly to the 'savingsBase' 
 
                         amount: estimatedGain,
                         owners: asset.owners,
