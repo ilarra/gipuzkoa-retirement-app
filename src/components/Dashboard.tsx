@@ -1,13 +1,14 @@
 
 import React from 'react';
-import type { SimulationResult } from '../types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
+import type { SimulationResult, FamilyMember } from '../types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, BarChart, Bar, ComposedChart } from 'recharts';
 
 interface Props {
     result: SimulationResult;
+    members: FamilyMember[];
 }
 
-export const Dashboard: React.FC<Props> = ({ result }) => {
+export const Dashboard: React.FC<Props> = ({ result, members }) => {
     const data = result.years;
 
     // Format large numbers
@@ -28,7 +29,7 @@ export const Dashboard: React.FC<Props> = ({ result }) => {
                 <div className="chart-container">
                     <h3>Net Worth Projection</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data}>
+                        <ComposedChart data={data}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="year" />
                             <YAxis tickFormatter={formatCurrency} />
@@ -49,7 +50,8 @@ export const Dashboard: React.FC<Props> = ({ result }) => {
                                     />
                                 );
                             })}
-                        </AreaChart>
+                            <Line type="monotone" dataKey="netWorth" stroke="#ff0000" strokeWidth={3} dot={false} name="Total Net Worth" />
+                        </ComposedChart>
                     </ResponsiveContainer>
                 </div>
 
@@ -78,7 +80,8 @@ export const Dashboard: React.FC<Props> = ({ result }) => {
                             <YAxis tickFormatter={formatCurrency} />
                             <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
                             <Legend />
-                            <Bar dataKey="withdrawalForTargetIncome" fill="#ff4d4f" name="Stock/Fund Sold" />
+                            <Bar dataKey="cashDrawdown" stackId="a" fill="#1890ff" name="Cash Withdrawn" />
+                            <Bar dataKey="stockDrawdown" stackId="a" fill="#ff4d4f" name="Stock/Fund Sold" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -99,6 +102,91 @@ export const Dashboard: React.FC<Props> = ({ result }) => {
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
+
+                <div className="chart-container">
+                    <h3>Tax Contribution by Family Member</h3>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="year" />
+                            <YAxis tickFormatter={formatCurrency} />
+                            <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
+                            <Legend />
+                            {Array.from(new Set(data.flatMap(d => Object.keys(d.memberTaxes || {})))).map((memberId, index) => {
+                                const member = members.find(m => m.id === memberId);
+                                const memberName = member ? member.name : `Member ${memberId}`;
+                                const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+                                return (
+                                    <Area
+                                        key={memberId}
+                                        type="monotone"
+                                        // Let's use a function accessor for dataKey?
+                                        dataKey={(row) => (row.memberTaxes[memberId]?.irpf || 0) + (row.memberTaxes[memberId]?.wealthTax || 0)}
+                                        stackId="1"
+                                        stroke={colors[index % colors.length]}
+                                        fill={colors[index % colors.length]}
+                                        name={memberName}
+                                    />
+                                );
+                            })}
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="chart-container">
+                    <h3>Wealth Tax by Family Member</h3>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="year" />
+                            <YAxis tickFormatter={formatCurrency} />
+                            <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
+                            <Legend />
+                            {Array.from(new Set(data.flatMap(d => Object.keys(d.memberTaxes || {})))).map((memberId, index) => {
+                                const member = members.find(m => m.id === memberId);
+                                const memberName = member ? `${member.name} (Wealth)` : `Member ${memberId}`;
+                                const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+                                return (
+                                    <Area
+                                        key={memberId}
+                                        type="monotone"
+                                        dataKey={(row) => (row.memberTaxes[memberId]?.wealthTax || 0)}
+                                        stackId="1"
+                                        stroke={colors[index % colors.length]}
+                                        fill={colors[index % colors.length]}
+                                        name={memberName}
+                                    />
+                                );
+                            })}
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
+                <div className="chart-container">
+                    <h3>Income Breakdown by Source</h3>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="year" />
+                            <YAxis tickFormatter={formatCurrency} />
+                            <Tooltip formatter={(value: number | undefined) => formatCurrency(value || 0)} />
+                            <Legend />
+                            {Array.from(new Set(data.flatMap(d => Object.keys(d.incomeBreakdown || {})))).map((sourceName, index) => {
+                                const colors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7300'];
+                                return (
+                                    <Area
+                                        key={sourceName}
+                                        type="monotone"
+                                        dataKey={`incomeBreakdown.${sourceName}`}
+                                        stackId="1"
+                                        stroke={colors[index % colors.length]}
+                                        fill={colors[index % colors.length]}
+                                        name={sourceName}
+                                    />
+                                );
+                            })}
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
 
             <div style={{ marginTop: '20px' }}>
@@ -112,10 +200,15 @@ export const Dashboard: React.FC<Props> = ({ result }) => {
                                 <th style={{ padding: '8px' }}>Net Worth</th>
                                 <th style={{ padding: '8px' }}>Cash Income</th>
                                 <th style={{ padding: '8px' }}>Expenses</th>
+                                <th style={{ padding: '8px' }}>Cash Withdrawn</th>
                                 <th style={{ padding: '8px' }}>Stock Sold</th>
                                 <th style={{ padding: '8px' }}>IRPF (Gen)</th>
                                 <th style={{ padding: '8px' }}>IRPF (Sav)</th>
                                 <th style={{ padding: '8px' }}>Wealth Tax</th>
+                                {Array.from(new Set(data.flatMap(d => Object.keys(d.memberTaxes || {})))).map(mid => {
+                                    const mName = members.find(m => m.id === mid)?.name || mid;
+                                    return <th key={mid} style={{ padding: '8px' }}>Tax ({mName})</th>;
+                                })}
                                 <th style={{ padding: '8px' }}>Cash Flow</th>
                             </tr>
                         </thead>
@@ -127,16 +220,26 @@ export const Dashboard: React.FC<Props> = ({ result }) => {
                                     <td style={{ padding: '8px' }}>{formatCurrency(row.netWorth)}</td>
                                     <td style={{ padding: '8px' }}>{formatCurrency(row.totalIncome)}</td>
                                     <td style={{ padding: '8px' }}>{formatCurrency(row.totalExpenses)}</td>
-                                    <td style={{ padding: '8px', color: '#ff4d4f' }}>{formatCurrency(row.withdrawalForTargetIncome)}</td>
+                                    <td style={{ padding: '8px', color: '#1890ff' }}>{formatCurrency(row.cashDrawdown || 0)}</td>
+                                    <td style={{ padding: '8px', color: '#ff4d4f' }}>{formatCurrency(row.stockDrawdown || 0)}</td>
                                     <td style={{ padding: '8px' }}>{formatCurrency(row.taxes.irpfGeneral)}</td>
                                     <td style={{ padding: '8px' }}>{formatCurrency(row.taxes.irpfSavings)}</td>
                                     <td style={{ padding: '8px' }}>{formatCurrency(row.taxes.wealthTax)}</td>
+                                    {Array.from(new Set(data.flatMap(d => Object.keys(d.memberTaxes || {})))).map(mid => (
+                                        <td key={mid} style={{ padding: '8px' }}>
+                                            {formatCurrency((row.memberTaxes[mid]?.irpf || 0) + (row.memberTaxes[mid]?.wealthTax || 0))}
+                                        </td>
+                                    ))}
                                     <td style={{ padding: '8px', color: row.cashFlow < 0 ? 'red' : 'green' }}>{formatCurrency(row.cashFlow)}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
+            </div>
+            <div style={{ marginTop: '20px', padding: '10px', background: '#f0f0f0' }}>
+                <h3>Debug Data (Years 0-2)</h3>
+                <pre>{JSON.stringify(data.slice(0, 3).map(y => ({ year: y.year, taxes: y.memberTaxes })), null, 2)}</pre>
             </div>
         </div>
     );

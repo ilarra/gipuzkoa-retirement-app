@@ -14,6 +14,7 @@ import './App.css';
 function App() {
   const [activeTab, setActiveTab] = useState<'family' | 'assets' | 'income' | 'dashboard' | 'logic'>('family');
   const [showImport, setShowImport] = useState(false);
+  const [doJointTaxes, setDoJointTaxes] = useState(false);
 
   const [members, setMembers] = useState<FamilyMember[]>([
     { id: '1', name: 'Parent 1', age: 40, isEarner: true },
@@ -41,7 +42,8 @@ function App() {
       startYear: new Date().getFullYear(),
       yearsToProject: 40,
       inflationRate: 0.02,
-      targetRetirementIncome
+      targetRetirementIncome,
+      doJointTaxes
     });
   }, [members, assets, incomes, expenses, targetRetirementIncome]);
 
@@ -130,7 +132,7 @@ function App() {
       <main className="app-content">
         {showImport && <DataImport onImport={handleImport} onClose={() => setShowImport(false)} />}
 
-        {activeTab === 'family' && <FamilyForm members={members} setMembers={setMembers} />}
+        {activeTab === 'family' && <FamilyForm members={members} setMembers={setMembers} doJointTaxes={doJointTaxes} setDoJointTaxes={setDoJointTaxes} />}
         {activeTab === 'assets' && <AssetsForm assets={assets} setAssets={setAssets} members={members} />}
         {activeTab === 'income' && (
           <div>

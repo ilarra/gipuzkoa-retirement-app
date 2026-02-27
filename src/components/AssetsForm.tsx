@@ -131,6 +131,16 @@ export const AssetsForm: React.FC<Props> = ({ assets, setAssets, members }) => {
                             </label>
                         </div>
                     )}
+                    <div className="form-group" style={{ width: '100%', marginTop: '5px' }}>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={asset.isForeignAsset || false}
+                                onChange={e => updateAsset(asset.id, 'isForeignAsset', e.target.checked)}
+                            />
+                            Asset strictly located outside Spain (Exempt from Wealth Tax under Bis 56 impatriate regime)
+                        </label>
+                    </div>
                 </div>
             ))}
             <button className="primary" onClick={addAsset}>Add Asset</button>

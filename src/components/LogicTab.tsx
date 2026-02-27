@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     IRPF_GENERAL_BRACKETS_2024,
-    IRPF_SAVINGS_BRACKETS_2024,
+    IRPF_SAVINGS_BRACKETS_2025,
     WEALTH_TAX_BRACKETS_2024,
     WEALTH_TAX_EXEMPT_MIN,
     MAIN_HOME_EXEMPT_MAX
@@ -50,7 +50,7 @@ export const LogicTab: React.FC = () => {
             </div>
 
             <div className="fiscal-card">
-                <h3>IRPF Savings Tax Brackets (2024)</h3>
+                <h3>IRPF Savings Tax Brackets (2025)</h3>
                 <table className="fiscal-table">
                     <thead>
                         <tr>
@@ -59,7 +59,7 @@ export const LogicTab: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {IRPF_SAVINGS_BRACKETS_2024.map((bracket, index) => (
+                        {IRPF_SAVINGS_BRACKETS_2025.map((bracket, index) => (
                             <tr key={index}>
                                 <td>{bracket.limit === Infinity ? 'Infinity' : `€${bracket.limit.toLocaleString()}`}</td>
                                 <td>{(bracket.rate * 100).toFixed(2)}%</td>

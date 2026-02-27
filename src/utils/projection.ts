@@ -7,6 +7,7 @@ export interface ProjectionParameters {
     yearsToProject: number;
     inflationRate: number; // e.g., 0.02
     targetRetirementIncome?: number; // Desired annual net income during retirement
+    doJointTaxes?: boolean; // Whether to calculate IRPF jointly
 }
 
 export function runProjection(
@@ -130,8 +131,17 @@ export function runProjection(
                 const amt = inc.realizedAmount / count;
                 inc.owners.forEach((oid: string) => {
                     if (mData[oid]) {
-                        if (inc.type === 'salary' || inc.type === 'pension' || inc.type === 'rental') mData[oid].generalBase += amt;
-                        else mData[oid].savingsBase += amt;
+                        const member = members.find(m => m.id === oid);
+                        const isBis56Active = member?.hasBis56Exemption && i < (member.bis56ExemptionYearsRemaining || 0);
+
+                        let taxableAmt = amt;
+                        // 30% exemption on salary for impatriates
+                        if (inc.type === 'salary' && isBis56Active) {
+                            taxableAmt = amt * 0.70;
+                        }
+
+                        if (inc.type === 'salary' || inc.type === 'pension' || inc.type === 'rental') mData[oid].generalBase += taxableAmt;
+                        else mData[oid].savingsBase += taxableAmt;
                     }
                 });
             });
@@ -145,8 +155,14 @@ export function runProjection(
 
                 ast.owners.forEach((oid: string) => {
                     if (mData[oid]) {
-                        mData[oid].netWealth += wealthVal;
-                        if (ast.isMainResidence) mData[oid].mainHomeValue += wealthVal;
+                        const member = members.find(m => m.id === oid);
+                        const isBis56Active = member?.hasBis56Exemption && i < (member.bis56ExemptionYearsRemaining || 0);
+
+                        // If bis56 is active, foreign assets are exempt from wealth tax
+                        if (!(isBis56Active && ast.isForeignAsset)) {
+                            mData[oid].netWealth += wealthVal;
+                            if (ast.isMainResidence) mData[oid].mainHomeValue += wealthVal;
+                        }
                     }
                 });
             });
@@ -186,17 +202,57 @@ export function runProjection(
 
             const memberTaxesResults: Record<string, TaxResults> = {};
 
+            let jointIrpfGen = 0;
+            let jointIrpfSav = 0;
+            let jointTotalBase = 0;
+
+            if (params.doJointTaxes) {
+                let jointGenBase = 0;
+                let jointSavBase = 0;
+                const earners = members.filter(m => m.isEarner);
+                earners.forEach(m => {
+                    const d = mData[m.id];
+                    if (d) {
+                        jointGenBase += d.generalBase;
+                        jointSavBase += d.savingsBase;
+                        jointTotalBase += (d.generalBase + d.savingsBase);
+                    }
+                });
+                jointIrpfGen = calculateIRPFGeneral(jointGenBase);
+                jointIrpfSav = calculateIRPFSavings(jointSavBase);
+            }
+
             for (const m of members) {
                 const d = mData[m.id];
                 if (!d) {
                     memberTaxesResults[m.id] = { irpf: 0, irpfGeneral: 0, irpfSavings: 0, wealthTax: 0, escudoFiscalAdjustment: 0 };
                     continue;
                 }
-                const taxGen = calculateIRPFGeneral(d.generalBase);
-                const taxSav = calculateIRPFSavings(d.savingsBase);
+
+                const isBis56Active = m.hasBis56Exemption && i < (m.bis56ExemptionYearsRemaining || 0);
+
+                let taxGen = calculateIRPFGeneral(d.generalBase);
+                let taxSav = calculateIRPFSavings(d.savingsBase);
+
+                if (params.doJointTaxes && m.isEarner) {
+                    const memberBase = d.generalBase + d.savingsBase;
+                    // If total base is 0, share is 0, which is fine because tax is 0.
+                    // If total base > 0, distribute proportional to their individual base.
+                    const share = jointTotalBase > 0 ? (memberBase / jointTotalBase) : 0;
+
+                    taxGen = jointIrpfGen * share;
+                    taxSav = jointIrpfSav * share;
+                }
+
                 const irpf = taxGen + taxSav;
-                const wealth = calculateWealthTax(d.netWealth, d.mainHomeValue > 0, d.mainHomeValue);
-                const { finalWealthTax, adjustment } = applyEscudoFiscal(irpf, wealth, d.generalBase, d.savingsBase);
+
+                // Impatriates (Bis 56) are taxed as non-residents for wealth, so they lose the main home exemption
+                const wealth = calculateWealthTax(d.netWealth, !isBis56Active && d.mainHomeValue > 0, d.mainHomeValue);
+
+                // Impatriates (Bis 56) DO NOT have access to the Escudo Fiscal (Tax Shield limit)
+                const { finalWealthTax, adjustment } = isBis56Active
+                    ? { finalWealthTax: wealth, adjustment: 0 }
+                    : applyEscudoFiscal(irpf, wealth, d.generalBase, d.savingsBase);
 
                 memberTaxesResults[m.id] = {
                     irpf,
@@ -219,6 +275,8 @@ export function runProjection(
         let netIncomeFixed = yearGrossFixed - (baseTaxes.irpf + baseTaxes.wealthTax);
 
         let drawdownAmount = 0;
+        let cashDrawdown = 0;
+        let stockDrawdown = 0;
 
         // Check if we are in "Retirement Phase" (Any owner retired? or primary?)
         // Let's apply if any owner is retired.
@@ -259,6 +317,11 @@ export function runProjection(
                     let estimatedGain = 0;
                     if (asset.type === 'stock' || asset.type === 'fund') {
                         estimatedGain = withdrawAmount * 0.5;
+                        stockDrawdown += withdrawAmount;
+                    } else if (asset.type === 'cash') {
+                        cashDrawdown += withdrawAmount;
+                    } else {
+                        stockDrawdown += withdrawAmount;
                     }
 
                     // We need to add this 'Withdrawal Income' to the realized incomes for the FINAL tax calc
@@ -337,6 +400,8 @@ export function runProjection(
             },
             cashFlow,
             withdrawalForTargetIncome: drawdownAmount,
+            cashDrawdown,
+            stockDrawdown,
             assetValues: currentAssets.reduce((acc, a) => ({ ...acc, [a.name]: a.value }), {} as Record<string, number>),
             incomeBreakdown: realizedIncomes.reduce((acc, inc) => {
                 const effectiveAmount = inc.realizedAmount;
@@ -365,32 +430,97 @@ export function runProjection(
         // Add savings / Remove burn per member
         Object.entries(memberCashFlows).forEach(([memberId, flow]) => {
             if (flow !== 0) {
-                // Find or create "Savings ({Name})"
+                let remainingFlow = flow;
                 const member = members.find(m => m.id === memberId);
-                const assetName = `Savings (${member?.name || memberId})`;
-                const assetId = `generated-cash-${memberId}`;
 
-                let cashAsset = currentAssets.find(a => a.id === assetId);
-                if (!cashAsset) {
-                    cashAsset = {
-                        id: assetId,
-                        name: assetName,
-                        type: 'cash',
-                        value: 0,
-                        owners: [memberId],
-                        purchaseValue: 0,
-                        isMainResidence: false,
-                        growthRate: 0 // Cash doesn't usually grow unless invested
-                    };
-                    currentAssets.push(cashAsset);
+                // 1. If positive flow, pay down debt first
+                if (remainingFlow > 0) {
+                    const debtAssetId = `generated-debt-${memberId}`;
+                    const debtAsset = currentAssets.find(a => a.id === debtAssetId);
+                    if (debtAsset && debtAsset.value < 0) {
+                        const debtToPay = Math.min(remainingFlow, Math.abs(debtAsset.value));
+                        debtAsset.value += debtToPay; // debtAsset is negative, so adding makes it closer to 0
+                        remainingFlow -= debtToPay;
+                    }
                 }
 
-                cashAsset.value += flow;
+                // 1.5 If Negative Flow (Deficit), try to sell liquid assets BEFORE creating more debt
+                if (remainingFlow < 0) {
+                    let deficit = Math.abs(remainingFlow);
 
-                // If negative, burn?
-                // The logic allows negative value (debt). 
-                // Alternatively, burn shared assets? 
-                // For now, let's allow negative personal cash (debt) or reduction of personal savings.
+                    // Find all liquid assets owned by this member (cash, other investments, stocks, funds)
+                    const memberLiquidAssets = currentAssets
+                        .filter(a => a.owners.includes(memberId) && (a.type === 'cash' || a.type === 'other' || a.type === 'stock' || a.type === 'fund') && a.value > 0 && !a.id.includes('generated-debt'))
+                        .sort((a, b) => {
+                            // Order of selling: 1. Cash, 2. Other Investments, 3. Lowest growth stocks/funds
+                            if (a.type === 'cash' && b.type !== 'cash') return -1;
+                            if (a.type !== 'cash' && b.type === 'cash') return 1;
+                            if (a.type === 'other' && b.type !== 'other') return -1;
+                            if (a.type !== 'other' && b.type === 'other') return 1;
+                            return (a.growthRate || 0) - (b.growthRate || 0);
+                        });
+
+                    for (const asset of memberLiquidAssets) {
+                        if (deficit <= 0) break;
+                        const withdrawAmount = Math.min(asset.value, deficit);
+                        asset.value -= withdrawAmount;
+                        deficit -= withdrawAmount;
+
+                        // We do not add this to the global 'drawdownAmount' tracker as that is reserved for
+                        // Target Retirement Income tracking. This is purely structural survival cashflow.
+                    }
+
+                    // Whatever deficit remains could not be covered by assets, so it will become debt
+                    remainingFlow = -deficit;
+                }
+
+                // 2. Apply remaining flow (positive or negative) to Other Investments
+                if (remainingFlow !== 0) {
+                    const assetName = `Other Investments (${member?.name || memberId})`;
+                    const assetId = `generated-investments-${memberId}`;
+
+                    let cashAsset = currentAssets.find(a => a.id === assetId);
+                    if (!cashAsset) {
+                        cashAsset = {
+                            id: assetId,
+                            name: assetName,
+                            type: 'other', // Not pure cash
+                            value: 0,
+                            owners: [memberId],
+                            purchaseValue: 0,
+                            isMainResidence: false,
+                            growthRate: 0.01 // Grows at 1% annually
+                        };
+                        currentAssets.push(cashAsset);
+                    }
+
+                    const newValue = cashAsset.value + remainingFlow;
+
+                    if (newValue < 0) {
+                        cashAsset.value = 0;
+
+                        // Spill over the remaining deficit into the Debt bucket
+                        const debtAssetName = `Accumulated Debt (${member?.name || memberId})`;
+                        const debtAssetId = `generated-debt-${memberId}`;
+                        let debtAsset = currentAssets.find(a => a.id === debtAssetId);
+                        if (!debtAsset) {
+                            debtAsset = {
+                                id: debtAssetId,
+                                name: debtAssetName,
+                                type: 'other',
+                                value: 0,
+                                owners: [memberId],
+                                purchaseValue: 0,
+                                isMainResidence: false,
+                                growthRate: 0 // Debt grows at 0% unless specified otherwise
+                            };
+                            currentAssets.push(debtAsset);
+                        }
+                        debtAsset.value += newValue; // newValue is negative
+                    } else {
+                        cashAsset.value = newValue;
+                    }
+                }
             }
         });
     }

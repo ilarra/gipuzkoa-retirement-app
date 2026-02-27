@@ -10,14 +10,26 @@ export const IRPF_GENERAL_BRACKETS_2024 = [
     { limit: Infinity, rate: 0.49, deduction: 81995.10 }
 ];
 
-// Savings base: 20% up to 2500, 21% next 2500-10000, 22% next 10000-15000, 23% next 15000-30000, 25% > 30000
-// Simplified based on search results saying "20% to 25% for >30k"
-export const IRPF_SAVINGS_BRACKETS_2024 = [
-    { limit: 2500, rate: 0.20 },
-    { limit: 10000, rate: 0.21 },
-    { limit: 15000, rate: 0.22 },
-    { limit: 30000, rate: 0.23 },
-    { limit: Infinity, rate: 0.25 }
+// Savings base 2025 (Gipuzkoa):
+// 0.00 to 7,500.00 -> 19%
+// 7,500.01 to 15,000.00 -> 20%
+// 15,000.01 to 30,000.00 -> 22%
+// 30,000.01 to 50,000.00 -> 24%
+// 50,000.01 to 90,000.00 -> 25.5%
+// 90,000.01 to 120,000.00 -> 26%
+// 120,000.01 to 240,000.00 -> 26.5%
+// 240,000.01 to 300,000.00 -> 27%
+// > 300,000.01 -> 28%
+export const IRPF_SAVINGS_BRACKETS_2025 = [
+    { limit: 7500, rate: 0.19 },
+    { limit: 15000, rate: 0.20 },
+    { limit: 30000, rate: 0.22 },
+    { limit: 50000, rate: 0.24 },
+    { limit: 90000, rate: 0.255 },
+    { limit: 120000, rate: 0.26 },
+    { limit: 240000, rate: 0.265 },
+    { limit: 300000, rate: 0.27 },
+    { limit: Infinity, rate: 0.28 }
 ];
 
 export const WEALTH_TAX_BRACKETS_2024 = [
@@ -62,7 +74,7 @@ export function calculateIRPFSavings(base: number): number {
     let tax = 0;
     let previousLimit = 0;
 
-    for (const bracket of IRPF_SAVINGS_BRACKETS_2024) {
+    for (const bracket of IRPF_SAVINGS_BRACKETS_2025) {
         if (base > previousLimit) {
             const taxableAmountInBracket = Math.min(base, bracket.limit) - previousLimit;
             tax += taxableAmountInBracket * bracket.rate;

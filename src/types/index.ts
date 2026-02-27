@@ -6,6 +6,8 @@ export interface FamilyMember {
     age: number;
     isEarner: boolean; // True if they have income/assets to declare
     retirementAge?: number; // Age at which they retire
+    hasBis56Exemption?: boolean; // Under Gipuzkoa Impatriate special regime
+    bis56ExemptionYearsRemaining?: number; // Years left for the exemption
 }
 
 export type AssetType = 'real_estate' | 'stock' | 'fund' | 'pension_plan' | 'cash' | 'other';
@@ -20,6 +22,7 @@ export interface Asset {
     isMainResidence: boolean; // Important for Wealth Tax exemption
     growthRate?: number; // Annual growth rate (e.g. 0.05 for 5%)
     valorCatastral?: number; // For Wealth Tax (Real Estate)
+    isForeignAsset?: boolean; // Exempt from Wealth Tax if owner has Bis 56
 }
 
 export type IncomeType = 'salary' | 'rental' | 'dividend' | 'interest' | 'pension' | 'other';
@@ -63,6 +66,8 @@ export interface YearResult {
     taxes: TaxResults;
     cashFlow: number; // Income - Expenses - Taxes
     withdrawalForTargetIncome: number; // Amount sold from assets to meet target
+    cashDrawdown: number; // Amount withdrawn from cash balances
+    stockDrawdown: number; // Amount withdrawn from stocks/funds
     assetValues: Record<string, number>; // Breakdown of value by Asset Name
     incomeBreakdown: Record<string, number>; // Breakdown of income by Source Name (Salary, Rental, etc.)
     memberTaxes: Record<string, TaxResults>; // Taxes paid by each family member
