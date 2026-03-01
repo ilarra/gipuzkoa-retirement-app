@@ -12,7 +12,7 @@ import type { ParsedData } from './utils/importUtils';
 import './App.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'family' | 'assets' | 'income' | 'dashboard' | 'logic'>('family');
+  const [activeTab, setActiveTab] = useState<'family' | 'assets' | 'income' | 'logic'>('family');
   const [showImport, setShowImport] = useState(false);
   const [doJointTaxes, setDoJointTaxes] = useState(false);
 
@@ -45,7 +45,7 @@ function App() {
       targetRetirementIncome,
       doJointTaxes
     });
-  }, [members, assets, incomes, expenses, targetRetirementIncome]);
+  }, [members, assets, incomes, expenses, targetRetirementIncome, doJointTaxes]);
 
   const handleExport = () => {
     exportToJSON({
@@ -121,41 +121,47 @@ function App() {
         </div>
       </header>
 
-      <nav style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-        <button className={activeTab === 'family' ? 'active' : ''} onClick={() => setActiveTab('family')}>Family</button>
-        <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => setActiveTab('assets')}>Assets</button>
-        <button className={activeTab === 'income' ? 'active' : ''} onClick={() => setActiveTab('income')}>Income & Expenses</button>
-        <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Dashboard</button>
-        <button className={activeTab === 'logic' ? 'active' : ''} onClick={() => setActiveTab('logic')}>Logic</button>
-      </nav>
+      <main className="main-layout">
+        <div className="left-panel">
+          <nav className="compact-nav" style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+            <button className={activeTab === 'family' ? 'active' : ''} onClick={() => setActiveTab('family')}>Family</button>
+            <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => setActiveTab('assets')}>Assets</button>
+            <button className={activeTab === 'income' ? 'active' : ''} onClick={() => setActiveTab('income')}>Income & Expenses</button>
+            <button className={activeTab === 'logic' ? 'active' : ''} onClick={() => setActiveTab('logic')}>Logic</button>
+          </nav>
 
-      <main className="app-content">
-        {showImport && <DataImport onImport={handleImport} onClose={() => setShowImport(false)} />}
+          <div className="left-panel-content app-content">
+            {showImport && <DataImport onImport={handleImport} onClose={() => setShowImport(false)} />}
 
-        {activeTab === 'family' && <FamilyForm members={members} setMembers={setMembers} doJointTaxes={doJointTaxes} setDoJointTaxes={setDoJointTaxes} />}
-        {activeTab === 'assets' && <AssetsForm assets={assets} setAssets={setAssets} members={members} />}
-        {activeTab === 'income' && (
-          <div>
-            <div className="form-section">
-              <h2>Retirement Goals</h2>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Target Annual Net Income in Retirement (€)</label>
-                  <input
-                    type="number"
-                    value={targetRetirementIncome}
-                    onChange={e => setTargetRetirementIncome(parseFloat(e.target.value) || 0)}
-                    placeholder="e.g. 40000"
-                  />
-                  <small style={{ color: '#666' }}>If income falls below this, assets (Stocks/Funds) will be sold to top up.</small>
+            {activeTab === 'family' && <FamilyForm members={members} setMembers={setMembers} doJointTaxes={doJointTaxes} setDoJointTaxes={setDoJointTaxes} />}
+            {activeTab === 'assets' && <AssetsForm assets={assets} setAssets={setAssets} members={members} />}
+            {activeTab === 'income' && (
+              <div>
+                <div className="form-section">
+                  <h2>Retirement Goals</h2>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Target Annual Net Income in Retirement (€)</label>
+                      <input
+                        type="number"
+                        value={targetRetirementIncome}
+                        onChange={e => setTargetRetirementIncome(parseFloat(e.target.value) || 0)}
+                        placeholder="e.g. 40000"
+                      />
+                      <small style={{ color: '#666' }}>If income falls below this, assets (Stocks/Funds) will be sold to top up.</small>
+                    </div>
+                  </div>
                 </div>
+                <IncomeForm incomes={incomes} setIncomes={setIncomes} expenses={expenses} setExpenses={setExpenses} members={members} />
               </div>
-            </div>
-            <IncomeForm incomes={incomes} setIncomes={setIncomes} expenses={expenses} setExpenses={setExpenses} members={members} />
+            )}
+            {activeTab === 'logic' && <LogicTab />}
           </div>
-        )}
-        {activeTab === 'dashboard' && <Dashboard result={simulationResult} members={members} />}
-        {activeTab === 'logic' && <LogicTab />}
+        </div>
+
+        <div className="right-panel">
+          <Dashboard result={simulationResult} members={members} />
+        </div>
       </main>
     </div>
   );

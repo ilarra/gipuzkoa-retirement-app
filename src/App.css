@@ -17,15 +17,20 @@ body {
   max-width: 100%;
   margin: 0 auto;
   padding: 20px;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 20px;
+  padding-bottom: 15px;
+  flex-shrink: 0;
 }
 
 .app-header h1 {
@@ -118,4 +123,57 @@ button.danger {
   border: 1px solid var(--border);
   border-radius: 8px;
   height: 400px;
+}
+
+.main-layout {
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+  flex: 1;
+  min-height: 0;
+}
+
+.left-panel {
+  flex: 0 0 650px;
+  /* fixed width for settings */
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 15px;
+}
+
+.left-panel-content {
+  /* It inherits .app-content styling */
+}
+
+.right-panel {
+  flex: 1;
+  min-width: 0;
+  /* allows charts to shrink */
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 15px;
+}
+
+nav.compact-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+nav.compact-nav button {
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1024px) {
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .left-panel,
+  .right-panel {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+  }
 }
